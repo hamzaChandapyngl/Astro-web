@@ -53,6 +53,14 @@ interface Props {
     <script>
       import '@scripts/lenisSmoothScroll.js';
     </script>
+    {/* Preta test login: hydrate window.pretaUser from the mock session
+        (set by /login) BEFORE the loader runs, so checkTargeting sees it. */}
+    <script is:inline>
+      try {
+        var u = localStorage.getItem('preta_sim_user');
+        if (u) window.pretaUser = Object.assign(JSON.parse(u), window.pretaUser || {});
+      } catch (e) {}
+    </script>
     {/* Preta SmartCode */}
   <script
   is:inline

@@ -92,6 +92,13 @@ const homeUrl = Astro.currentLocale === 'fr' ? '/fr' : '/';
           ))
         }
 
+        <a
+          href="/login"
+          class="rounded-md px-3 py-1.5 text-sm font-semibold text-neutral-700 ring-1 ring-yellow-400/50 transition hover:bg-yellow-400/20 dark:text-neutral-300"
+        >
+          Preta Login
+        </a>
+
         <Authentication />
         <LanguagePicker />
         {/* ThemeIcon component specifically for larger screens */}

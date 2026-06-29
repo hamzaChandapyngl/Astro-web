@@ -1,0 +1,173 @@
+---
+// Preta TEST login — a mock "customer session" for testing the Policy Engine.
+// It does NOT do real auth. It writes a simulated user profile to
+// localStorage('preta_sim_user'), which MainLayout hydrates into
+// window.pretaUser before the Preta loader runs. Both the legacy targeting
+// engine and the new @preta/evaluator read this profile.
+import MainLayout from '@/layouts/MainLayout.astro';
+import { SITE } from '@data/constants';
+
+const pageTitle = `Preta Test Login | ${SITE.title}`;
+---
+
+<MainLayout title={pageTitle}>
+  <section class="mx-auto max-w-2xl px-4 py-12">
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold text-neutral-800 dark:text-neutral-200">Preta Test Login</h1>
+      <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+        Simulate a logged-in customer. This sets the visitor profile the Policy Engine evaluates
+        (<code>window.pretaUser</code>). Not real auth — for testing only.
+      </p>
+    </div>
+
+    {/* Current session */}
+    <div
+      id="preta-status"
+      class="mb-8 rounded-lg border border-neutral-300 bg-neutral-100 p-4 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+    >
+      <span class="text-neutral-500">Loading session…</span>
+    </div>
+
+    {/* Personas */}
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">Quick personas</h2>
+    <div class="mb-8 grid gap-3 sm:grid-cols-3" id="preta-personas"></div>
+
+    {/* Custom form */}
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">Custom profile</h2>
+    <form id="preta-login-form" class="grid gap-4 sm:grid-cols-2">
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Plan</span>
+        <select name="plan" class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+          <option value="free">free</option>
+          <option value="pro">pro</option>
+          <option value="enterprise">enterprise</option>
+        </select>
+      </label>
+
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Account type</span>
+        <select name="account_type" class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+          <option value="personal">personal</option>
+          <option value="business">business</option>
+        </select>
+      </label>
+
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Risk score (0–1)</span>
+        <input name="risk_score" type="number" step="0.01" min="0" max="1" value="0.5"
+          class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" />
+      </label>
+
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Age</span>
+        <input name="age" type="number" min="0" value="30"
+          class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" />
+      </label>
+
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Audiences (comma-separated)</span>
+        <input name="audiences" type="text" placeholder="high_value, frequent_buyer"
+          class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" />
+      </label>
+
+      <label class="text-sm">
+        <span class="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">Payment method</span>
+        <input name="payment_method" type="text" placeholder="visa"
+          class="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" />
+      </label>
+
+      <label class="flex items-center gap-2 text-sm sm:col-span-2">
+        <input name="isPrime" type="checkbox" class="h-4 w-4" />
+        <span class="font-medium text-neutral-700 dark:text-neutral-300">Prime / member</span>
+      </label>
+
+      <div class="flex gap-3 sm:col-span-2">
+        <button type="submit"
+          class="rounded-lg bg-yellow-400 px-5 py-2.5 text-sm font-semibold text-neutral-900 transition hover:bg-yellow-500">
+          Log in as this user
+        </button>
+        <button type="button" id="preta-logout"
+          class="rounded-lg border border-neutral-300 px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
+          Log out (guest)
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <script is:inline>
+    (function () {
+      const KEY = 'preta_sim_user';
+      const statusEl = document.getElementById('preta-status');
+      const form = document.getElementById('preta-login-form');
+      const personasEl = document.getElementById('preta-personas');
+
+      const PERSONAS = [
+        { label: '🏦 High-risk Enterprise', plan: 'enterprise', account_type: 'business', risk_score: 0.85, age: 42, isPrime: true, audiences: ['high_value'], payment_method: 'amex' },
+        { label: '🛒 Pro shopper', plan: 'pro', account_type: 'personal', risk_score: 0.3, age: 28, isPrime: true, audiences: ['frequent_buyer'], payment_method: 'visa' },
+        { label: '🆓 Free user', plan: 'free', account_type: 'personal', risk_score: 0.1, age: 22, isPrime: false, audiences: [], payment_method: '' },
+      ];
+
+      function getUser() {
+        try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
+      }
+
+      function renderStatus() {
+        const u = getUser();
+        if (!u) {
+          statusEl.innerHTML = '<span class="font-semibold text-neutral-700 dark:text-neutral-300">Guest</span> — no profile set. The engine sees only geo/device/time.';
+          return;
+        }
+        statusEl.innerHTML =
+          '<div class="font-semibold text-green-600 dark:text-green-400">Logged in ✓</div>' +
+          '<pre class="mt-2 overflow-auto text-xs text-neutral-700 dark:text-neutral-300">' +
+          JSON.stringify(u, null, 2).replace(/</g, '&lt;') + '</pre>';
+      }
+
+      function login(profile) {
+        const user = Object.assign({ id: 'usr_' + Math.random().toString(36).slice(2, 9), isGuest: false }, profile);
+        localStorage.setItem(KEY, JSON.stringify(user));
+        window.pretaUser = Object.assign(user, window.pretaUser || {});
+        renderStatus();
+        // Reload so the Preta loader re-evaluates with the new profile.
+        setTimeout(function () { window.location.href = '/'; }, 400);
+      }
+
+      // Personas
+      PERSONAS.forEach(function (p) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rounded-lg border border-neutral-300 bg-white p-3 text-left text-sm transition hover:border-yellow-400 dark:border-neutral-700 dark:bg-neutral-900';
+        btn.innerHTML = '<div class="font-semibold text-neutral-800 dark:text-neutral-200">' + p.label + '</div>' +
+          '<div class="mt-1 text-xs text-neutral-500">' + p.plan + ' · risk ' + p.risk_score + '</div>';
+        btn.addEventListener('click', function () { login(p); });
+        personasEl.appendChild(btn);
+      });
+
+      // Custom form
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const audiences = String(fd.get('audiences') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        login({
+          plan: fd.get('plan'),
+          account_type: fd.get('account_type'),
+          risk_score: parseFloat(fd.get('risk_score')) || 0,
+          age: parseInt(fd.get('age'), 10) || 0,
+          isPrime: fd.get('isPrime') === 'on',
+          audiences: audiences,
+          targetedAudience: audiences[0] || undefined,
+          payment_method: fd.get('payment_method') || undefined,
+        });
+      });
+
+      document.getElementById('preta-logout').addEventListener('click', function () {
+        localStorage.removeItem(KEY);
+        try { delete window.pretaUser; } catch (e) { window.pretaUser = undefined; }
+        renderStatus();
+        setTimeout(function () { window.location.href = '/'; }, 300);
+      });
+
+      renderStatus();
+    })();
+  </script>
+</MainLayout>
